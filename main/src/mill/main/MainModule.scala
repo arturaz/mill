@@ -388,9 +388,9 @@ trait MainModule extends BaseModule0 {
   /**
    * Shuts down mill's background server
    */
-  def shutdown(): Command[Unit] = Target.command {
+  def shutdown(): Command[Unit] = Task.Command {
     Target.log.info("Shutting down Mill server...")
-    Target.ctx.systemExit(0)
+    Target.ctx().systemExit(0)
     ()
   }
 
@@ -400,12 +400,23 @@ trait MainModule extends BaseModule0 {
    * You can use it to quickly generate a starter project. There are lots of
    * templates out there for many frameworks and tools!
    */
-  def init(evaluator: Evaluator, args: String*): Command[Unit] = Target.command {
-    RunScript.evaluateTasksNamed(
-      evaluator,
-      Seq("mill.scalalib.giter8.Giter8Module/init") ++ args,
-      SelectMode.Separated
-    )
+  def init(evaluator: Evaluator, args: String*): Command[Unit] = Task.Command {
+    Task.log.info("Looking up whether this is a Maven project that we could convert into Mill...")
+    val rootPom = Task.workspace / "pom.xml"
+
+    if (os.exists(rootPom)) {
+      Task.log.info(s"Detected a Maven project at $rootPom, converting to Mill...")
+      initializers.MavenInit(Task.workspace, rootPom, Task.log, evaluator, args: _*)
+    }
+    else {
+      Task.log.info("Not a Maven project ('pom.xml' not found). Generating a Giter8 project instead...")
+
+      RunScript.evaluateTasksNamed(
+        evaluator,
+        Seq("mill.scalalib.giter8.Giter8Module/init") ++ args,
+        SelectMode.Separated
+      )
+    }
 
     ()
   }
