@@ -1,14 +1,12 @@
 package mill.main.initializers.maven
 
-/** https://maven.apache.org/guides/introduction/introduction-to-dependency-mechanism.html#dependency-scope */
+/** Dependency scopes for `dependencies` tag. */
 private[maven] sealed trait DependencyScope {
   def render: String = this match {
     case DependencyScope.Compile => "compile"
     case DependencyScope.Provided => "provided"
     case DependencyScope.Runtime => "runtime"
     case DependencyScope.Test => "test"
-    case DependencyScope.System => "system"
-    case DependencyScope.Import => "import"
   }
 }
 private[maven] object DependencyScope {
@@ -24,19 +22,19 @@ private[maven] object DependencyScope {
 
   case object Test extends DependencyScope
 
-  /** This scope is similar to provided except that you have to provide the JAR which contains it explicitly.
-   * The artifact is always available and is not looked up in a repository. */
-  case object System extends DependencyScope
-
-  case object Import extends DependencyScope
-
-  def parse(str: String): Either[String, DependencyScope] = str match {
-    case "compile" => Right(Compile)
-    case "provided" => Right(Provided)
-    case "runtime" => Right(Runtime)
-    case "test" => Right(Test)
-    case "system" => Right(System)
-    case "import" => Right(Import)
+  /**
+   * @return
+   *   - Left(error)
+   *   - Right(Left(warning))
+   *   - Right(Right(scope))
+   */
+  def parse(str: String): Either[String, Either[String, DependencyScope]] = str match {
+    case "compile" => Right(Right(Compile))
+    case "provided" => Right(Right(Provided))
+    case "runtime" => Right(Right(Runtime))
+    case "test" => Right(Right(Test))
+    case "system" => Right(Left(s"'$str' scope is deprecated and not supported"))
+    case "import" => Right(Left(s"'$str' scope not supported for the <dependencies> section"))
     case _ => Left(s"Unknown dependency scope: '$str'")
   }
 }

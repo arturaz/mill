@@ -18,7 +18,7 @@ private[maven] case class POMImportDependency(groupId: TemplatedString, artifact
 }
 object POMImportDependency {
   def from(dep: Dependency): Either[String, Option[POMImportDependency]] = {
-    if (dep.scope == DependencyScope.Import && dep.type_.contains(DependencyType.POM)) {
+    if (dep.scope == DependencyManagementScope.Import && dep.type_.contains(DependencyType.POM)) {
       dep.version match {
         case Some(version) => Right(Some(apply(groupId = dep.groupId, artifactId = dep.artifactId, version = version)))
         case None => Left(s"$dep has no version")

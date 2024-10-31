@@ -12,7 +12,7 @@ private[maven] case class JavaModule(
   compilerSettings: Vector[TemplatedString],
   publishSettings: PublishSettings
 ) {
-  def dependenciesFor(scope: DependencyScope): Iterator[Dependency] =
+  def dependenciesFor(scope: DependencyManagementScope): Iterator[Dependency] =
     dependencies.iterator.filter(_.scope == scope)
 
   def renderProperties: Option[String] =
@@ -33,7 +33,7 @@ private[maven] case class JavaModule(
       renderPomImports,
       renderDependencyManagementForImportedPom,
       renderDependencies(prefix = ""),
-      renderDependencies(DependencyScope.Test).map { deps =>
+      renderDependencies(DependencyManagementScope.Test).map { deps =>
         s"""// Converted from `test` Maven scope
            |def testIvyDeps = Agg(
            |  ${deps.indentNFL(2)}
@@ -61,30 +61,13 @@ private[maven] case class JavaModule(
     }
   }
 
-  /** Renders a map of dependency management for imported POMs. */
-  def renderDependencyManagementForImportedPom: Option[String] = {
-    val blocks = dependencyManagement.iterator.map { dep =>
-      s""""${dep.asDependencyManagement(properties)}" -> ${dep.render(properties)}"""
-    }.toVector
-
-    JavaModule.renderDependencyManagementCode(blocks)
-  }
-
-  def renderDependencyManagementForModule: Option[String] = {
-    val blocks = pomImportDependencies.iterator.flatMap { case (_, module) =>
-      module.dependencyManagement
-    }.distinct.map(dep => s""""${dep.asDependencyManagement}" -> ${dep.render}""").toVector
-
-    JavaModule.renderDependencyManagementCode(blocks)
-  }
-
-  def renderDependencies(scope: DependencyScope): Option[String] = {
+  def renderDependencies(scope: DependencyManagementScope): Option[String] = {
     val deps = dependenciesFor(scope).map(_.render).toVector
     renderVector(deps, ",\n")
   }
 
   def renderDependencies(prefix: String): Option[String] = {
-    def aggFor(scope: DependencyScope): Option[String] =
+    def aggFor(scope: DependencyManagementScope): Option[String] =
       renderDependencies(scope).map { deps =>
         s"""Agg(
            |  ${deps.indentNFL(2)}
@@ -92,11 +75,11 @@ private[maven] case class JavaModule(
            |""".stripMargin
       }
 
-    def blockFor(scope: DependencyScope, name: String): Option[String] = {
+    def blockFor(scope: DependencyManagementScope, name: String): Option[String] = {
       blockForAggs(scope, name, aggFor(scope).toVector)
     }
 
-    def blockForAggs(scope: DependencyScope, name: String, aggs: Vector[String]): Option[String] = {
+    def blockForAggs(scope: DependencyManagementScope, name: String, aggs: Vector[String]): Option[String] = {
       if (aggs.isEmpty) None
       else Some(
         s"""// Converted from `${scope.render}` Maven scope
@@ -106,9 +89,9 @@ private[maven] case class JavaModule(
     }
 
     val blocks = Vector(
-      blockFor(DependencyScope.Compile, "ivyDeps"),
-      blockFor(DependencyScope.Provided, "compileIvyDeps"),
-      blockFor(DependencyScope.Runtime, "runIvyDeps"),
+      blockFor(DependencyManagementScope.Compile, "ivyDeps"),
+      blockFor(DependencyManagementScope.Provided, "compileIvyDeps"),
+      blockFor(DependencyManagementScope.Runtime, "runIvyDeps"),
     ).flatten
 
     renderVector(blocks, "\n\n")
@@ -133,12 +116,12 @@ private[maven] case class JavaModule(
 
     val testModule =
       if (
-        dependenciesFor(DependencyScope.Test).exists { dep =>
+        dependenciesFor(DependencyManagementScope.Test).exists { dep =>
           dep.groupId.resolve(properties).contains("junit") && dep.artifactId.resolve(properties).contains("junit")
         }
       ) Some("TestModule.Junit4")
       else if (
-        dependenciesFor(DependencyScope.Test).exists { dep =>
+        dependenciesFor(DependencyManagementScope.Test).exists { dep =>
           dep.groupId.resolve(properties).exists(_.startsWith("org.junit.jupiter"))
         }
       ) Some("TestModule.Junit5")
@@ -147,7 +130,7 @@ private[maven] case class JavaModule(
     val testModuleWith = testModule.fold("")(m => s" with $m")
 
     val testBlocks = Vector(
-      renderDependencies(DependencyScope.Test).map { deps =>
+      renderDependencies(DependencyManagementScope.Test).map { deps =>
         s"""// Converted from `test` Maven scope
            |override def ivyDeps = Agg(
            |  ${deps.indentNFL(2)}
@@ -260,19 +243,6 @@ object JavaModule {
            |}
            |""".stripMargin
       )
-    }
-  }
-
-  def renderDependencyManagementCode(blocks: Vector[String]): Option[String] = {
-    renderVector(blocks).map { deps =>
-      s"""object DependencyManagement {
-         |  val map = Map(
-         |    ${deps.indentNFL(4)}
-         |  )
-         |
-         |  def apply(dep: String): String = map.get(dep).getOrElse(throw new Exception(s"Unknown dependency: $$dep"))
-         |}
-         |""".stripMargin
     }
   }
 }
