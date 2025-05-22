@@ -75,9 +75,17 @@ object IntegrationTester {
 
       val shellable: os.Shellable = (millExecutable, serverArgs, "--disable-ticker", debugArgs, cmd)
 
+      val runEnv = millTestSuiteEnv ++ env
+      println(
+        s"""Running: ${shellable.value.mkString(" ")}
+           |In: $cwd
+           |Env:
+           |  ${runEnv.iterator.map { case (k, v) => s"$k=$v" }.mkString("\n  ")}
+           |Timeout: $timeout""".stripMargin
+      )
       val res0 = os.call(
         cmd = shellable,
-        env = millTestSuiteEnv ++ env,
+        env = runEnv,
         cwd = cwd,
         stdin = stdin,
         stdout = stdout,

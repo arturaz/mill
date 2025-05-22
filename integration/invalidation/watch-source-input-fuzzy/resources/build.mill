@@ -6,13 +6,15 @@ import mill.define.BuildCtx
 def sources = Task.Sources("src")
 
 def mainTask = Task {
-  val sourceCount = sources().map(_.size)
+  val sourceCount = sources().flatMap(pathRef => os.list(pathRef.path)).size
   println(s"Found $sourceCount sources")
 }
 
 // Wait for the instruction to exit from the test.
+def watchValuePath = moduleDir / "watchValue.txt"
+BuildCtx.watchValue(PathRef(watchValuePath))
 BuildCtx.withFilesystemCheckerDisabled {
-  if (os.read(moduleDir / "watchValue.txt").contains("exit")) {
+  if (os.exists(watchValuePath) && os.read(watchValuePath).contains("exit")) {
     Thread.sleep(1000)
     System.exit(0)
   }
