@@ -81,7 +81,7 @@ object IntegrationTester {
            |In: $cwd
            |Env:
            |  ${runEnv.iterator.map { case (k, v) => s"$k=$v" }.mkString("\n  ")}
-           |Timeout: $timeout""".stripMargin
+           |Timeout: ${timeout}ms""".stripMargin
       )
       val res0 = os.call(
         cmd = shellable,

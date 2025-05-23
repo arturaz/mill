@@ -1,8 +1,8 @@
 package mill.integration
 
 import mill.constants.Util
-import mill.testkit.{UtestIntegrationTestSuite, IntegrationTester}
-import utest._
+import mill.testkit.{IntegrationTester, MillWatchTests}
+import utest.*
 
 import scala.collection.mutable
 import scala.concurrent.{Await, Future}
@@ -19,53 +19,13 @@ import scala.concurrent.ExecutionContext.Implicits.global
  * 4. `mill.define.BuildCtx.watchValue`
  * 5. Implicitly watched files, like `build.mill`
  */
-trait WatchTests extends UtestIntegrationTestSuite {
-
-  val maxDuration = 120000
-  def awaitCompletionMarker(tester: IntegrationTester, name: String): Unit = {
-    val maxTime = System.currentTimeMillis() + maxDuration
-    while (!os.exists(tester.workspacePath / "out" / name)) {
-      if (System.currentTimeMillis() > maxTime) {
-        sys.error(s"awaitCompletionMarker($name) timed out")
-      }
-      Thread.sleep(100)
-    }
-  }
-
-  def testBase(show: Boolean)(f: (
-      mutable.Buffer[String],
-      mutable.Buffer[String],
-      mutable.Buffer[String]
-  ) => IntegrationTester.EvalResult): Unit = {
-    val expectedOut = mutable.Buffer.empty[String]
-    // Most of these are normal `println`s, so they go to `stdout` by
-    // default unless you use `show` in which case they go to `stderr`.
-    val expectedErr = if (show) mutable.Buffer.empty[String] else expectedOut
-    val expectedShows0 = mutable.Buffer.empty[String]
-    val res = f(expectedOut, expectedErr, expectedShows0)
-    val (shows, out) = res.out.linesIterator.toVector.partition(_.startsWith("\""))
-    val err = res.err.linesIterator.toVector.filter(s =>
-      s.startsWith("Setting up ") || s.startsWith("Running ")
-    )
-
-    assert(out == expectedOut)
-
-    // If show is not enabled, we don't expect any of our custom prints to go to stderr
-    if (show) assert(err == expectedErr)
-    else assert(err.isEmpty)
-
-    val expectedShows = expectedShows0.map('"' + _ + '"')
-    if (show) assert(shows == expectedShows)
-  }
-}
-
-object WatchSourceTests extends WatchTests {
+object WatchSourceTests extends MillWatchTests {
   val tests: Tests = Tests {
     def testWatchSource(tester: IntegrationTester, show: Boolean) =
-      testBase(show) { (expectedOut, expectedErr, expectedShows) =>
+      testBase(show) { args =>
+        import args.*, tester.*
         val showArgs = if (show) Seq("show") else Nil
-        import tester._
-        val evalResult = Future { eval(("--watch", showArgs, "qux"), timeout = maxDuration) }
+        val evalResult = Future { eval(("--watch", showArgs, "qux"), timeout = maxTestDuration.toMillis) }
 
         awaitCompletionMarker(tester, "initialized0")
         awaitCompletionMarker(tester, "quxRan0")
@@ -125,10 +85,10 @@ object WatchSourceTests extends WatchTests {
         awaitCompletionMarker(tester, "initialized2")
         expectedOut.append("Setting up build.mill")
 
-        Await.result(evalResult, Duration.apply(maxDuration, SECONDS))
+        Await.result(evalResult, maxTestDuration)
       }
-    test("sources") {
 
+    test("sources") {
       // Make sure we clean up the workspace between retries
       test("noshow") - retry(1) {
         integrationTest { tester =>
@@ -137,6 +97,7 @@ object WatchSourceTests extends WatchTests {
           }
         }
       }
+
       test("show") - retry(1) {
         integrationTest { tester =>
           if (!Util.isWindows) {
@@ -148,14 +109,14 @@ object WatchSourceTests extends WatchTests {
   }
 }
 
-object WatchInputTests extends WatchTests {
+object WatchInputTests extends MillWatchTests {
   val tests: Tests = Tests {
 
     def testWatchInput(tester: IntegrationTester, show: Boolean) =
-      testBase(show) { (expectedOut, expectedErr, expectedShows) =>
+      testBase(show) { args =>
+        import args.*, tester.*
         val showArgs = if (show) Seq("show") else Nil
-        import tester._
-        val evalResult = Future { eval(("--watch", showArgs, "lol"), timeout = maxDuration) }
+        val evalResult = Future { eval(("--watch", showArgs, "lol"), timeout = maxTestDuration.toMillis) }
 
         awaitCompletionMarker(tester, "initialized0")
         awaitCompletionMarker(tester, "lolRan0")
@@ -181,11 +142,10 @@ object WatchInputTests extends WatchTests {
         if (show) expectedOut.append("{}")
         expectedOut.append("Setting up build.mill")
 
-        Await.result(evalResult, Duration.apply(maxDuration, SECONDS))
+        Await.result(evalResult, maxTestDuration)
       }
 
     test("input") {
-
       // Make sure we clean up the workspace between retries
       test("noshow") - retry(1) {
         integrationTest { tester =>
@@ -194,6 +154,7 @@ object WatchInputTests extends WatchTests {
           }
         }
       }
+
       test("show") - retry(1) {
         integrationTest { tester =>
           if (!Util.isWindows) {

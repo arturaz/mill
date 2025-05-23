@@ -1,18 +1,14 @@
 package mill.integration
 
-import mill.testkit.UtestIntegrationTestSuite
+import mill.testkit.MillWatchTests
 import utest.*
 
 import scala.collection.mutable
-import scala.concurrent.{Await, Future}
-import scala.concurrent.duration.*
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.{Await, Future}
 import scala.util.Random
 
-object WatchFuzzyTests extends UtestIntegrationTestSuite {
-  val maxTestDuration = 120.seconds
-  val maxInstructionDuration = 5.seconds
-
+object WatchFuzzyTests extends MillWatchTests {
   /** Instruct the mill executing `--watch` to exit. */
   def exitWatch(workspacePath: os.Path) = os.write.over(workspacePath / "watchValue.txt", "exit")
 
@@ -41,8 +37,15 @@ object WatchFuzzyTests extends UtestIntegrationTestSuite {
       import tester.*
 
       val rng = new Random(10)
-      generateTree(workspacePath / "src", rng, 100_000)
+      val files = generateTree(workspacePath / "src", rng, 100_000)
       val evalResult = Future { eval(("--watch", "mainTask"), timeout = maxTestDuration.toMillis) }
+      awaitCompletionMarker(tester, "initialized0")
+      awaitCompletionMarker(tester, "mainTaskRan0")
+
+      files.iterator.take(files.length / 2).foreach { file =>
+        os.write.over(file, s"Edited ${file.last}")
+      }
+      awaitCompletionMarker(tester, "mainTaskRan1")
 
       exitWatch(workspacePath)
       Await.result(evalResult, maxInstructionDuration)
